@@ -1,0 +1,593 @@
+<!doctype html>
+<!-- 页面结构入口：style.css 负责外观，app.js 负责交互，visualizer.js 负责真实频谱。
+     id 会被脚本按名字查找，改名时必须同步 JS；class 多用于样式，body.immersive 控制视图切换。
+     画廊卡片 h1 是歌曲名，p 是歌手；沉浸歌名/歌手使用独立的 immersiveTitle/immersiveArtist。 -->
+<html lang="zh-CN">
+  <!-- 文档元信息与实际加载的样式；当前只加载 /style.css，不加载根目录视觉参数微调片段。 -->
+  <head>
+    <meta charset="utf-8" />
+    <meta
+      name="viewport"
+      content="width=device-width,initial-scale=1"
+    />
+    <meta
+      name="color-scheme"
+      content="dark"
+    />
+    <title>听单 / HigherWeb</title>
+    <!-- 页面实际加载的样式文件；画廊歌名/歌手字号在这个 CSS 内调整。 -->
+    <link
+      rel="stylesheet"
+      href="/style.css"
+    />
+  </head>
+  <body>
+    <div
+      class="scene"
+      aria-hidden="true"
+    >
+      <!-- 自定义背景 A 层，与 bgB 交替淡入，不存放专辑封面。 -->
+      <div
+        id="bgA"
+        class="backdrop active"
+      ></div>
+      <!-- 自定义背景 B 层；图片来自 public/Image169。 -->
+      <div
+        id="bgB"
+        class="backdrop"
+      ></div>
+      <div class="veil"></div>
+    </div>
+    <!-- 权限检查进度细线，JS 按检查数量更新宽度。 -->
+    <div
+      id="progress"
+      class="progress"
+    ></div>
+    <!-- 顶部工具：歌单选择、扫码、权限检查、搜索、视图切换、背景及退出。 -->
+    <header>
+      <div class="brand">听单<span>HigherWeb</span></div>
+      <div class="tools">
+        <!-- 账号歌单下拉框，登录后由 JS 填充，包含本地虚拟歌单入口。 -->
+        <select
+          id="playlists"
+          aria-label="选择歌单"
+        >
+          <option value="">选择你的歌单</option></select
+        ><button id="scan">扫码登录</button><button id="check">检查权限</button
+        ><button
+          id="searchOpen"
+          class="icon"
+          title="搜索 · I"
+          aria-label="搜索歌曲"
+        >
+          ⌕</button
+        ><button
+          id="viewToggle"
+          aria-pressed="false"
+          title="切换沉浸模式 · F"
+        >
+          沉浸 · F</button
+        ><button
+          id="backgroundOpen"
+          class="icon"
+          title="当前歌曲背景"
+          aria-label="设置歌曲背景"
+        >
+          切换背景</button
+        ><button
+          id="logout"
+          hidden
+        >
+          退出
+        </button>
+      </div>
+    </header>
+    <!-- 主舞台：左侧/沉浸唱机区域和可复用的九卡片横向画廊。 -->
+    <main
+      class="stage"
+      id="stage"
+    >
+      <section
+        class="station"
+        aria-label="唱片与歌词"
+      >
+        <!-- 唱片与唱臂共用外壳；整体缩放改这里的 CSS，避免覆盖黑胶自身旋转。 -->
+        <div class="record-deck">
+          <!-- 旋转黑胶容器；playing 类控制转动，外层 record-deck 控制唱臂联动。 -->
+          <div
+            id="vinyl"
+            class="vinyl"
+          >
+            <!-- 唱片中心封面，由 paintCover 处理加载与错序保护。 -->
+            <img
+              id="discCover"
+              alt="当前唱片封面"
+            />
+          </div>
+          <!-- 唱臂 SVG：金属渐变、轴承、弯曲臂杆与唱头。旋转支点和播放/暂停角度由 CSS 控制。 -->
+          <svg
+            class="tonearm"
+            viewBox="0 0 180 300"
+            aria-hidden="true"
+          >
+            <defs>
+              <!-- 唱臂金属渐变定义，后面的 fill/stroke 通过 url(#metal-classic) 引用。 -->
+              <linearGradient
+                id="metal-classic"
+                x1="0"
+                x2="1"
+              >
+                <stop stop-color="#777680" />
+                <stop
+                  offset=".35"
+                  stop-color="#eeedf0"
+                />
+                <stop
+                  offset=".6"
+                  stop-color="#bebdc8"
+                />
+                <stop
+                  offset="1"
+                  stop-color="#55545f"
+                />
+              </linearGradient>
+            </defs>
+
+            <circle
+              cx="130"
+              cy="36"
+              r="26"
+              fill="#16151c"
+              stroke="#ffffff35"
+            />
+
+            <circle
+              cx="130"
+              cy="36"
+              r="17"
+              fill="url(#metal-classic)"
+            />
+
+            <path
+              d="M130 22v150q0 18-12 34l-31 42"
+              stroke="#16151c"
+              stroke-width="13"
+              fill="none"
+            />
+
+            <path
+              d="M130 22v150q0 18-12 34l-31 42"
+              stroke="url(#metal-classic)"
+              stroke-width="9"
+              fill="none"
+            />
+
+            <path
+              d="M127 25v145"
+              stroke="#fff"
+              stroke-opacity=".5"
+              stroke-width="1.4"
+            />
+
+            <rect
+              x="119"
+              y="7"
+              width="22"
+              height="36"
+              rx="3"
+              fill="url(#metal-classic)"
+            />
+
+            <circle
+              cx="130"
+              cy="36"
+              r="5"
+              fill="#373540"
+              stroke="#dedce4"
+            />
+
+            <!-- 唱头局部坐标组，通过 translate/rotate 放在唱臂末端；子路径是外壳、条纹和唱针。 -->
+            <g transform="translate(86 247) rotate(36)">
+              <rect
+                x="-9"
+                y="-11"
+                width="18"
+                height="32"
+                rx="3"
+                fill="#292730"
+                stroke="#aaa6b4"
+              />
+
+              <path
+                d="M-5-4h10M-5 1h10"
+                stroke="#aaa6b4"
+              />
+
+              <path
+                d="M0 21v8"
+                stroke="#e6d9cd"
+                stroke-width="2"
+              />
+            </g>
+          </svg>
+        </div>
+        <!-- 沉浸文字面板：歌曲信息、三行歌词及频谱。 -->
+        <div class="listening-panel">
+          <div class="song-heading">
+            <!-- 沉浸标题上方的唱片序号，由当前歌曲索引更新。 -->
+            <span
+              id="recordNumber"
+              class="record-eyebrow"
+              >唱片 01</span
+            >
+            <!-- 沉浸模式歌曲名；改字号看 CSS 的 body.immersive #immersiveTitle。 -->
+            <h1 id="immersiveTitle">选择你的第一首歌</h1>
+            <!-- 沉浸模式歌手；改字号看 CSS 的 #immersiveArtist。 -->
+            <p id="immersiveArtist">你的私人音乐空间</p>
+          </div>
+          <!-- 透明歌词定位外壳：正常占据三行空间，内部歌词绝对居中、文字阴影增强对比并保留上下渐隐。 -->
+          <div class="lyric-shell">
+            <div
+              class="lyric"
+              aria-live="off"
+            >
+              <!-- 上一句歌词。 -->
+              <div
+                id="lyricBefore"
+                class="secondary"
+              ></div>
+              <!-- 当前句歌词或加载提示。 -->
+              <div id="lyricCurrent">让音乐慢下来。</div>
+              <!-- 下一句歌词。 -->
+              <div
+                id="lyricAfter"
+                class="secondary"
+              ></div>
+            </div>
+          </div>
+          <!-- 真实音频频谱画布，visualizer.js 绘制；CSS 决定容器尺寸。 -->
+          <canvas
+            id="musicSpectrum"
+            class="music-spectrum"
+            aria-label="实时音频频谱"
+          ></canvas>
+        </div>
+      </section>
+      <section
+        class="rail-viewport"
+        aria-label="横向音乐画廊"
+      >
+        <!-- 九张卡片永久复用的轨道；数组位置 4 为当前曲，左右各 4 张。 -->
+        <div
+          id="rail"
+          class="rail"
+        >
+          <!-- 九个节点永久复用，中心索引为 4，左右各四张缓冲。 -->
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="0"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="1"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="2"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="3"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="4"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="5"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="6"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="7"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+          <!-- 画廊可复用卡片：封面 img、歌曲名 h1、歌手 p、序号 number；只改字体时去 style.css 改 .card h1/.card p。 -->
+          <figure
+            class="card"
+            data-slot="8"
+          >
+            <div class="cover"><img alt="" /><span class="number"></span></div>
+            <figcaption>
+              <h1></h1>
+              <p></p>
+            </figcaption>
+          </figure>
+        </div>
+      </section>
+      <!-- 无可播放歌曲时的空状态。 -->
+      <section
+        class="empty"
+        id="empty"
+      >
+        <h1>把歌单<br />留给这一刻。</h1>
+        <!-- 空状态说明，不是当前播放歌曲信息。 -->
+        <p id="emptyText">
+          扫码连接酷狗，选择歌单并检查权限。已确认有完整音源的歌曲会出现在这里。
+        </p>
+        <!-- 空状态下的扫码连接入口。 -->
+        <button id="emptyScan">连接酷狗</button>
+      </section>
+    </main>
+    <div class="hint">滚轮切歌 / ← → / I 搜索</div>
+    <!-- 底部播放区：时间进度、播放按钮、模式、状态、音量；歌词偏移控件由 app.js 动态插入。 -->
+    <footer>
+      <div class="timeline">
+        <!-- 当前播放时间。 -->
+        <span id="elapsed">0:00</span
+        ><input
+          id="seek"
+          type="range"
+          min="0"
+          max="1000"
+          value="0"
+          aria-label="播放进度"
+        /><span id="duration">0:00</span>
+      </div>
+      <div class="transport">
+        <div class="transport-main">
+          <!-- 上一首；随机模式沿真实历史回退。 -->
+          <button
+            id="previous"
+            aria-label="上一首"
+          >
+            ←</button
+          ><button
+            id="toggle"
+            class="play"
+            aria-label="播放或暂停"
+          >
+            ▶</button
+          ><button
+            id="next"
+            aria-label="下一首"
+          >
+            →</button
+          ><select
+            id="mode"
+            aria-label="播放模式"
+          >
+            <option value="sequence">顺序播放</option>
+            <option value="single">单曲循环</option>
+            <option value="shuffle">随机播放</option>
+          </select>
+        </div>
+        <!-- 单行播放/网络提示区；歌词偏移组插在它前面。 -->
+        <div
+          id="status"
+          class="status"
+          role="status"
+        >
+          等待连接
+        </div>
+        <!-- 音量图标与滑块外壳。 -->
+        <div
+          class="volume-control"
+          id="volumeControl"
+          role="group"
+          aria-label="音量控制"
+        >
+          <span
+            class="volume-icon"
+            aria-hidden="true"
+            ><svg
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="1.5"
+              stroke-linecap="round"
+              stroke-linejoin="round"
+            >
+              <path d="M11 4 6 8H3v8h3l5 4Z" />
+              <path d="M15 8a6 6 0 0 1 0 8M18 5a10 10 0 0 1 0 14" /></svg></span
+          ><input
+            class="volume"
+            id="volume"
+            aria-label="音量"
+            type="range"
+            min="0"
+            max="1"
+            value="0.7"
+            step="0.01"
+          />
+        </div>
+      </div>
+    </footer>
+    <!-- 页面唯一媒体元素；不重复创建，切换画廊/沉浸时保留当前进度。 -->
+    <audio
+      id="audio"
+      preload="metadata"
+    ></audio>
+    <!-- 扫码登录弹窗，关闭会停止轮询。 -->
+    <dialog id="loginDialog">
+      <div class="dialog-top">
+        <h2>连接酷狗</h2>
+        <button
+          data-close="loginDialog"
+          aria-label="关闭登录"
+        >
+          ×
+        </button>
+      </div>
+      <!-- 后端返回的二维码图片，等待有效数据时隐藏。 -->
+      <img
+        id="qr"
+        class="qr"
+        alt="酷狗登录二维码"
+        hidden
+      />
+      <!-- 二维码加载/等待确认/过期状态。 -->
+      <p id="qrStatus">正在获取二维码…</p>
+      <!-- 刷新二维码会让旧轮询失效。 -->
+      <button id="refreshQR">刷新二维码</button>
+    </dialog>
+    <!-- 当前可播放队列的搜索弹窗，不是全网歌曲搜索。 -->
+    <dialog id="searchDialog">
+      <div class="dialog-top">
+        <h2>找到下一首</h2>
+        <button
+          data-close="searchDialog"
+          aria-label="关闭搜索"
+        >
+          ×
+        </button>
+      </div>
+      <!-- 回车提交搜索，优先精确歌名，再做歌名/歌手包含匹配。 -->
+      <form id="searchForm">
+        <!-- 搜索关键词输入框。 -->
+        <input
+          id="searchInput"
+          class="search-input"
+          placeholder="歌名或歌手，回车前往"
+          aria-label="歌名或歌手"
+          autocomplete="off"
+        />
+        <!-- 搜索结果和操作提示。 -->
+        <p id="searchHint">在当前已授权歌单中搜索 / Esc 关闭</p>
+      </form>
+    </dialog>
+    <!-- 当前歌曲自定义背景选择弹窗。 -->
+    <dialog id="backgroundDialog">
+      <div class="dialog-top">
+        <h2>这一首的背景</h2>
+        <button
+          data-close="backgroundDialog"
+          aria-label="关闭背景设置"
+        >
+          ×
+        </button>
+      </div>
+      <!-- 图片目录为空或读取失败时的说明。 -->
+      <p id="backgroundHint">选择 Image169 文件夹中的图片。</p>
+      <!-- 删除当前歌曲与背景文件名的绑定，恢复默认深色。 -->
+      <button id="clearBackground">恢复默认深色背景</button>
+      <!-- 由 JS 按后端返回文件名生成缩略图按钮。 -->
+      <div
+        id="backgroundOptions"
+        class="background-options"
+      ></div>
+    </dialog>
+    <!-- 展示未入选歌曲及原因，不会改动酷狗真实歌单。 -->
+    <dialog id="rejectedDialog">
+      <div class="dialog-top">
+        <h2>未授权的音乐</h2>
+        <button
+          data-close="rejectedDialog"
+          aria-label="关闭未授权歌单"
+        >
+          ×
+        </button>
+      </div>
+      <p>
+        未通过完整音源筛选的歌曲仅在这里显示。“待确认”不等于没有购买。可点击“重新检查”。
+      </p>
+      <!-- 只重试当前原歌单内未入选记录。 -->
+      <button id="retryRejected">重新检查</button>
+      <!-- JS 安全生成的歌曲/原因列表。 -->
+      <div
+        id="rejectedList"
+        class="rejected"
+      ></div>
+    </dialog>
+    <!-- 远距离搜索快闪遮罩，近距离和减少动态效果时跳过。 -->
+    <div
+      id="montage"
+      class="montage"
+      hidden
+      aria-hidden="true"
+    >
+      <!-- 快闪封面与大歌名的动画外壳。 -->
+      <div
+        id="montageFrame"
+        class="montage-frame"
+      >
+        <!-- 快闪复用的唯一图片节点，防止每帧新增 DOM。 -->
+        <img
+          id="flashCover"
+          alt=""
+        />
+        <!-- 快闪当前帧对应的大歌名。 -->
+        <h2 id="flashTitle"></h2>
+      </div>
+    </div>
+    <!-- 交互脚本，defer 保证 HTML 元素解析后再执行。 -->
+    <script
+      src="/app.js"
+      defer
+    ></script>
+    <!-- 频谱脚本，复用 app.js 所用的同一个 audio。 -->
+    <script
+      src="/visualizer.js"
+      defer
+    ></script>
+  </body>
+</html>
