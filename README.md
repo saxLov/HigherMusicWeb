@@ -37,7 +37,7 @@ HigherWeb 用原生 HTML、CSS、JavaScript 和 Node.js 搭建。扫码连接酷
 歌单内的搜索:
 按i键或者直接点击右上角的搜索图标
 
-![img](./docs/images/ExForSe.png)
+![img](./docs/images/exForSe.png)
 
 
 
