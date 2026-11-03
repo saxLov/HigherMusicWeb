@@ -10,7 +10,7 @@ test('只有完整授权结果签发同源音频凭据，凭据不跨账号复�
   const a = { user: {} },
     b = { user: {} },
     unknown = { state: 'unknown', url: 'https://example.com/a' };
-  assert.equal(mediaTickets(a, unknown), unknown);
+  assert.deepEqual(mediaTickets(a, unknown), { state: 'unknown' });
   const result = mediaTickets(a, {
     state: 'allowed',
     playbackState: 'allowed',

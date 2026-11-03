@@ -5,11 +5,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { PlaybackQueue } from '../public/queue.mjs';
 
-test('顺序播放只按入选队列推进，到末尾停止', () => {
+test('顺序播放按入选队列推进，末尾回到第一首', () => {
   const q = new PlaybackQueue();
   q.select('a');
   assert.equal(q.next(['a', 'c'], 'a', { ended: true }), 'c');
-  assert.equal(q.next(['a', 'c'], 'c', { ended: true }), null);
+  assert.equal(q.next(['a', 'c'], 'c', { ended: true }), 'a');
   assert.equal(q.previous(['a', 'c'], 'c'), 'a');
 });
 test('单曲循环在自然结束时重播，手动下一首仍可切歌', () => {

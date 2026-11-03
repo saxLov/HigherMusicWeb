@@ -14,7 +14,7 @@
       name="color-scheme"
       content="dark"
     />
-    <title>听单 / HigherWeb</title>
+    <title>听单 / HigherWeb 2.0.1</title>
     <!-- 页面实际加载的样式文件；画廊歌名/歌手字号在这个 CSS 内调整。 -->
     <link
       rel="stylesheet"
@@ -45,7 +45,7 @@
     ></div>
     <!-- 顶部工具：歌单选择、扫码、权限检查、搜索、视图切换、背景及退出。 -->
     <header>
-      <div class="brand">听单<span>HigherWeb</span></div>
+      <div class="brand">听单<span>HigherWeb 2.0.1</span></div>
       <div class="tools">
         <!-- 账号歌单下拉框，登录后由 JS 填充，包含本地虚拟歌单入口。 -->
         <select
@@ -74,7 +74,9 @@
           aria-label="设置歌曲背景"
         >
           切换背景</button
-        ><button
+        ><label class="history-sync" title="真实播放超过15秒同步最近听过；本轮拖动后不报">
+          <input id="historySync" type="checkbox" checked />听歌历史同步
+        </label><button
           id="logout"
           hidden
         >
@@ -514,6 +516,7 @@
         <!-- 搜索结果和操作提示。 -->
         <p id="searchHint">在当前已授权歌单中搜索 / Esc 关闭</p>
       </form>
+      <div id="searchResults" class="search-results" aria-label="搜索结果"></div>
     </dialog>
     <!-- 当前歌曲自定义背景选择弹窗。 -->
     <dialog id="backgroundDialog">
@@ -539,7 +542,7 @@
     <!-- 展示未入选歌曲及原因，不会改动酷狗真实歌单。 -->
     <dialog id="rejectedDialog">
       <div class="dialog-top">
-        <h2>未授权的音乐</h2>
+        <h2>暂不可播放</h2>
         <button
           data-close="rejectedDialog"
           aria-label="关闭未授权歌单"
@@ -550,7 +553,12 @@
       <p>
         未通过完整音源筛选的歌曲仅在这里显示。“待确认”不等于没有购买。可点击“重新检查”。
       </p>
-      <!-- 只重试当前原歌单内未入选记录。 -->
+      <select id="rejectedFilter" aria-label="筛选暂不可播放原因">
+        <option value="all">全部原因</option><option value="rights">权益待确认</option>
+        <option value="source">有权益，音源不可用</option><option value="preview">仅试听</option>
+        <option value="catalogue">平台未上架</option><option value="network">请求失败</option>
+      </select>
+      <!-- 只重试当前原歌单内、当前分类的失败记录。 -->
       <button id="retryRejected">重新检查</button>
       <!-- JS 安全生成的歌曲/原因列表。 -->
       <div
@@ -579,6 +587,12 @@
         <h2 id="flashTitle"></h2>
       </div>
     </div>
+    <script src="/player-core.js" defer></script>
+    <script src="/listening.js" defer></script>
+    <script src="/api-client.js" defer></script>
+    <script src="/lyrics.js" defer></script>
+    <script src="/backgrounds.js" defer></script>
+    <script src="/search.js" defer></script>
     <!-- 交互脚本，defer 保证 HTML 元素解析后再执行。 -->
     <script
       src="/app.js"

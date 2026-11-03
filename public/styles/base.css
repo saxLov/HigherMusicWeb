@@ -1,0 +1,1287 @@
+/* HigherWeb 实际加载的样式总表：public/index.html 的 /style.css。
+ * 【快速查找】画廊歌名字号 → .card h1；画廊歌手字号 → .card p。
+ * 【小屏提醒】窗口宽度 ≤800px 时，后面的 .card h1 将歌名字号单独设为 15px（原 25px 的 60%）。
+ * 【沉浸模式】歌名 → body.immersive #immersiveTitle；歌手 → #immersiveArtist，与画廊字体独立。
+ * 【字号单位】px=固定像素；vw=窗口宽度的百分之一；clamp(最小,自适应,最大) 限制动态字号。
+ * 【覆盖顺序】本文件保留多轮视觉调整；先比选择器优先级，再看同优先级规则的前后顺序。
+ * 请先查目标元素及所在 @media，不要只修改第一次出现的同名选择器。
+ * 【歌词面板】最终定位、三行定高、毛玻璃与渐隐规则位于文件末尾“歌词面板隔离”。 */
+:root {
+  /* 全站基础深色；未被更具体背景覆盖的区域使用它。 */
+  --base: #121212;
+  /* 面板色变量；保留为主题入口，实际面板也可能有直接写入的颜色。 */
+  --panel: #1b1c1d;
+  /* 默认主要文字颜色。 */
+  --ink: #efeeeb;
+  /* 次要文字颜色。 */
+  --muted: #949593;
+  /* 通用细边框颜色，8 位十六进制最后两位为透明度。 */
+  --line: #ffffff21;
+  /* 画廊封面边长同时受窗口宽高限制；100dvh 扣除工具栏、文字区和留白后，避免卡片超出舞台被裁切。 */
+  --card: min(31vw, 390px, calc(100dvh - 361px));
+  /* 相邻卡片中心的水平间距 = 卡片宽度 + 卡片之间留白。 */
+  --step: calc(var(--card) + 54px);
+  /* 字体优先级从左到右；前一字体未安装时使用后一字体。 */
+  font-family: 'Segoe UI', 'Microsoft YaHei', sans-serif;
+  color: var(--ink);
+  background: var(--base);
+}
+* {
+  /* border-box 让宽高包含边框及内边距。 */
+  box-sizing: border-box;
+}
+html,
+body {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 100%;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  /* 控制触底/触顶后的滚动传递和回弹。 */
+  overscroll-behavior: none;
+}
+button,
+input,
+select {
+  /* 字体简写；inherit 继承父级字体设置。 */
+  font: inherit;
+}
+button,
+select {
+  color: inherit;
+  background: #ffffff09;
+  border: 1px solid var(--line);
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 8px;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 10px 15px;
+  /* 鼠标指针样式，pointer 提示可点击。 */
+  cursor: pointer;
+}
+button:hover {
+  background: #ffffff14;
+}
+button:disabled {
+  opacity: 0.35;
+  /* 鼠标指针样式，pointer 提示可点击。 */
+  cursor: default;
+}
+button:focus-visible,
+input:focus-visible,
+select:focus-visible {
+  /* 键盘焦点轮廓，不占用布局空间。 */
+  outline: 2px solid #d5d3cd;
+  /* 焦点轮廓与元素边缘的距离。 */
+  outline-offset: 5px;
+}
+[hidden] {
+  display: none !important;
+}
+.scene,
+.backdrop,
+.veil {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  inset: 0;
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+}
+.scene {
+  background: #121212;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: -1;
+}
+.backdrop {
+  background: center/cover no-repeat;
+  opacity: 0;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity 850ms ease;
+  filter: brightness(0.4);
+}
+.backdrop.active {
+  opacity: 1;
+}
+.veil {
+  background:
+    linear-gradient(90deg, #121212b8, #12121230 60%, #12121280),
+    linear-gradient(0deg, #121212, transparent 35%, #121212a0);
+}
+header {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  inset: 0 0 auto;
+  display: flex;
+  /* 主轴对齐；space-between 把两端元素分开，center 居中。 */
+  justify-content: space-between;
+  align-items: center;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 25px 4vw;
+  gap: 20px;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 5;
+}
+.brand {
+  font-size: 21px;
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 600;
+  letter-spacing: 3px;
+}
+.brand span {
+  font-size: 11px;
+  letter-spacing: 1px;
+  color: var(--muted);
+  margin-left: 15px;
+}
+.tools {
+  display: flex;
+  gap: 9px;
+  align-items: center;
+}
+.tools select {
+  max-width: 230px;
+}
+.icon {
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 9px 13px;
+}
+.stage {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  inset: 100px 0 125px;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+}
+.station {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  left: 5vw;
+  top: 50%;
+  width: 27vw;
+  transform: translateY(-50%);
+  /* 文字水平对齐。 */
+  text-align: center;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 2;
+}
+.vinyl {
+  /* 高度扣除：舞台外 225px + 唱片下间距 34px + 三行歌词 108px + 缓冲 24px。 */
+  width: min(24vw, 310px, calc(100dvh - 391px));
+  /* 宽高比例：1 为正方形，16/9 为横向背景缩略图。 */
+  aspect-ratio: 1;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0 auto 34px;
+  background: repeating-radial-gradient(circle at center, #232424 0 1px, #181919 2px 4px);
+  box-shadow:
+    0 8px 60px #0004,
+    inset 0 0 0 1px #ffffff12;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+  /* 关键帧动画的名称、周期、曲线与重复方式。 */
+  animation: spin 18s linear infinite;
+  /* running 运行动画，paused 停在当前帧。 */
+  animation-play-state: paused;
+}
+.vinyl.playing {
+  /* running 运行动画，paused 停在当前帧。 */
+  animation-play-state: running;
+}
+.vinyl::after {
+  /* 伪元素的生成内容；空字符串也会创建装饰图层。 */
+  content: '';
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: 47%;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  background: #202121;
+  box-shadow: 0 0 0 1px #ffffff35;
+}
+.vinyl img {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: 30%;
+  width: 40%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 40%;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  /* 图片填充方式：cover 填满并可裁切，contain 完整显示可能留白。 */
+  object-fit: cover;
+  filter: none;
+}
+.lyric {
+  /* 最低高度，减少换内容时上下跳动。 */
+  min-height: 94px;
+  display: flex;
+  /* 弹性布局主轴方向，column 为纵向。 */
+  flex-direction: column;
+  /* 主轴对齐；space-between 把两端元素分开，center 居中。 */
+  justify-content: center;
+  gap: 12px;
+  color: #ffffff;
+  /* 文字阴影，提高复杂背景上的可读性。 */
+  text-shadow:
+    0 2px 16px #000,
+    0 1px 4px #000;
+  font-size: clamp(15px, 1.3vw, 22px);
+  line-height: 1.6;
+}
+.lyric .secondary {
+  font-size: 12px;
+  opacity: 0.42;
+}
+.rail-viewport {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  left: 36vw;
+  right: 0;
+  top: 50%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: min(68vh, 560px);
+  transform: translateY(-50%);
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: visible;
+}
+.rail {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 100%;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+  left: calc((64vw - var(--card)) / 2 - 9vw);
+}
+.card {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  top: 50%;
+  width: var(--card);
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+  transform: translate(calc(var(--offset) * var(--step)), -50%);
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition:
+    transform 560ms cubic-bezier(0.2, 0.75, 0.2, 1),
+    opacity 560ms;
+  opacity: 0.2;
+}
+.card[data-offset='0'] {
+  opacity: 1;
+}
+.cover {
+  /* 宽高比例：1 为正方形，16/9 为横向背景缩略图。 */
+  aspect-ratio: 1;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+  background: #242525;
+  box-shadow: 0 25px 55px #0004;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+}
+.cover img {
+  display: block;
+  width: 100%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 100%;
+  /* 图片填充方式：cover 填满并可裁切，contain 完整显示可能留白。 */
+  object-fit: cover;
+  filter: none;
+}
+.card figcaption {
+  /* 固定文字区总高度（含顶部留白）：两行歌名 + 10px 间距 + 一行 14px 歌手。
+   * 每张卡片总高一致，translateY(-50%) 居中时封面就不会因歌名长短上下错位。 */
+  min-height: 112px;
+  height: 112px;
+  /* 封面与文字的距离；已计入上面的总高度。 */
+  padding-top: 23px;
+  /* 歌手内容异常过长时裁切在预留区内，不撑大整张卡片。 */
+  overflow: hidden;
+}
+.card h1 {
+  /* 【画廊歌名字号·桌面】原 clamp(22px, 2.7vw, 40px) 各项乘 60%。
+   * 得到 13.2px / 1.62vw / 24px，再用 max 保证不小于歌手的 14px。 */
+  font-size: max(14px, clamp(13.2px, 1.62vw, 24px));
+  /* 固定预留两行：每行 1.2em，两行总高 2.4em，短歌名也保留第二行位置。 */
+  line-height: 1.2;
+  height: 2.4em;
+  min-height: 2.4em;
+  /* 最多显示两行，超出的文字由浏览器多行截断，不把歌手或封面挤走。 */
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  /* 同时声明标准属性，兼容新版实现并消除 VS Code 的 vendorPrefix 提示。 */
+  line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  /* 沿用原有字重、标题到歌手的间距及字距。 */
+  font-weight: 450;
+  margin: 0 0 10px;
+  letter-spacing: -0.8px;
+  overflow-wrap: anywhere;
+}
+.card p {
+  font-size: 14px;
+  color: #babbb7;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+  line-height: 1.5;
+  /* 歌手字号仍为上面的 14px；长音乐人名称单行省略，不侵占固定文字区的第二行。 */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.card .number {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  right: 13px;
+  bottom: 12px;
+  font-size: 11px;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 4px 7px;
+  background: #12121295;
+  backdrop-filter: blur(8px);
+}
+.no-transition .card {
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: none;
+}
+.empty {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  left: 40vw;
+  right: 8vw;
+  top: 50%;
+  transform: translateY(-50%);
+  max-width: 500px;
+}
+.empty h1 {
+  font-size: clamp(24px, 2.5vw, 40px);
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 350;
+  letter-spacing: -2px;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0 0 20px;
+}
+.empty p {
+  color: #a5a6a1;
+  line-height: 1.9;
+}
+.empty button {
+  /* 与上方元素的外部间距。 */
+  margin-top: 10px;
+}
+footer {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  inset: auto 4vw 20px;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 5;
+  /* 顶部边框，可用于底栏分隔线。 */
+  border-top: 1px solid var(--line);
+  /* 内容与容器顶部的留白。 */
+  padding-top: 16px;
+}
+.timeline {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  font-size: 11px;
+  color: #b5b6b1;
+}
+input[type='range'] {
+  /* 原生表单控件的强调色，适用于尚未完全自定义外观的滑块。 */
+  accent-color: #d4d5cf;
+  width: 100%;
+  /* 鼠标指针样式，pointer 提示可点击。 */
+  cursor: pointer;
+}
+.transport {
+  /* 与上方元素的外部间距。 */
+  margin-top: 12px;
+  display: flex;
+  /* 主轴对齐；space-between 把两端元素分开，center 居中。 */
+  justify-content: space-between;
+  align-items: center;
+  gap: 20px;
+}
+.transport-main {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.play {
+  width: 47px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 47px;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  font-size: 19px;
+}
+.transport small {
+  color: var(--muted);
+  font-size: 11px;
+}
+.transport select {
+  font-size: 12px;
+}
+.status {
+  font-size: 12px;
+  max-width: 46vw;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  /* 文字被裁切时的标记；ellipsis 需要配合宽度限制及 overflow。 */
+  text-overflow: ellipsis;
+  /* 是否保留空白及换行；nowrap 强制单行。 */
+  white-space: nowrap;
+  color: #b0b1ab;
+}
+.progress {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 1px;
+  background: #aaa;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 0;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 10;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: width 0.2s;
+}
+.volume {
+  max-width: 100px;
+}
+.hint {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  left: 5vw;
+  bottom: 150px;
+  color: #71736e;
+  font-size: 11px;
+  letter-spacing: 1px;
+}
+dialog {
+  color: var(--ink);
+  background: #1b1c1d;
+  border: 1px solid #ffffff24;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 14px;
+  box-shadow: 0 30px 120px #0008;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 28px;
+  max-width: min(620px, 92vw);
+  /* 高度上限，超出后是否滚动由 overflow 决定。 */
+  max-height: 80vh;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: auto;
+}
+dialog::backdrop {
+  background: #121212da;
+  backdrop-filter: blur(18px);
+}
+dialog h2 {
+  font-size: 23px;
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 450;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0 0 18px;
+}
+dialog p {
+  color: #aeb0aa;
+  font-size: 13px;
+  line-height: 1.8;
+}
+.dialog-top {
+  display: flex;
+  /* 主轴对齐；space-between 把两端元素分开，center 居中。 */
+  justify-content: space-between;
+  gap: 30px;
+  align-items: center;
+  margin-bottom: 12px;
+}
+.dialog-top button {
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 5px 10px;
+}
+.search-input {
+  width: min(500px, 75vw);
+  font-size: 26px;
+  border: 0;
+  /* 底部边框，可用于输入框/列表分隔。 */
+  border-bottom: 1px solid #ffffff35;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 14px 0;
+  background: transparent;
+  color: #fff;
+}
+.qr {
+  display: block;
+  width: 220px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 220px;
+  /* 图片填充方式：cover 填满并可裁切，contain 完整显示可能留白。 */
+  object-fit: contain;
+  background: white;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 20px auto;
+}
+.background-options {
+  display: grid;
+  /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.background-options button {
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 0;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  /* 文字水平对齐。 */
+  text-align: left;
+  font-size: 11px;
+}
+.background-options img {
+  display: block;
+  width: 100%;
+  /* 宽高比例：1 为正方形，16/9 为横向背景缩略图。 */
+  aspect-ratio: 16/9;
+  /* 图片填充方式：cover 填满并可裁切，contain 完整显示可能留白。 */
+  object-fit: cover;
+  filter: none;
+}
+.background-options span {
+  display: block;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 8px;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  /* 文字被裁切时的标记；ellipsis 需要配合宽度限制及 overflow。 */
+  text-overflow: ellipsis;
+}
+.rejected {
+  display: grid;
+  gap: 0;
+}
+.rejected > div {
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 14px 0;
+  /* 底部边框，可用于输入框/列表分隔。 */
+  border-bottom: 1px solid var(--line);
+}
+.rejected strong {
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 400;
+}
+.rejected small {
+  display: block;
+  color: #9a9d95;
+  line-height: 1.6;
+  /* 与上方元素的外部间距。 */
+  margin-top: 5px;
+}
+.montage {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: fixed;
+  inset: 0;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 50;
+  display: grid;
+  /* 网格项目的垂直/水平对齐简写。 */
+  place-items: center;
+  background: #151515;
+  opacity: 1;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+}
+.montage img {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: min(65vh, 65vw);
+  /* 宽高比例：1 为正方形，16/9 为横向背景缩略图。 */
+  aspect-ratio: 1;
+  /* 图片填充方式：cover 填满并可裁切，contain 完整显示可能留白。 */
+  object-fit: cover;
+  filter: brightness(0.42);
+}
+.montage h2 {
+  /*强制不换行*/
+  white-space: nowrap;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+  max-width: 92vw;
+  /* 文字水平对齐。 */
+  text-align: center;
+  font-size: clamp(30px, 6vw, 100px);
+  line-height: 1.02;
+  letter-spacing: -4px;
+  color: #fff;
+  /* 文字阴影，提高复杂背景上的可读性。 */
+  text-shadow: 0 5px 40px #000;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 450;
+}
+.montage.landing h2 {
+  /* 关键帧动画的名称、周期、曲线与重复方式。 */
+  animation: land 650ms ease-out forwards;
+}
+.montage.landing {
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity 650ms;
+  opacity: 0;
+}
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+@keyframes land {
+  to {
+    transform: scale(1.35);
+    opacity: 0;
+  }
+}
+@media (max-width: 800px) {
+  :root {
+    /* 画廊封面边长同时受窗口宽高限制；100dvh 扣除工具栏、文字区和留白后，避免卡片超出舞台被裁切。 */
+    --card: min(59vw, 330px, calc(100dvh - 417px));
+    /* 相邻卡片中心的水平间距 = 卡片宽度 + 卡片之间留白。 */
+    --step: calc(var(--card) + 30px);
+  }
+  header {
+    /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+    padding: 20px;
+    /* 是否允许弹性子项换行。 */
+    flex-wrap: wrap;
+    gap: 12px;
+  }
+  .brand span {
+    display: none;
+  }
+  .tools {
+    gap: 5px;
+    width: 100%;
+  }
+  .tools select {
+    flex: 1;
+    min-width: 0;
+    max-width: none;
+  }
+  .tools button {
+    font-size: 12px;
+    /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+    padding: 8px;
+  }
+  .stage {
+    inset: 135px 0 145px;
+  }
+  .station {
+    left: 3vw;
+    width: 22vw;
+  }
+  .vinyl {
+    /* 小屏扣除：舞台外 310px + 唱片下间距 22px + 歌词 96px + 缓冲 24px。 */
+    width: min(21vw, calc(100dvh - 452px));
+    margin-bottom: 22px;
+  }
+  .lyric {
+    font-size: 12px;
+    gap: 7px;
+    /* 最低高度，减少换内容时上下跳动。 */
+    min-height: 100px;
+  }
+  .lyric .secondary {
+    font-size: 10px;
+  }
+  .rail-viewport {
+    left: 31vw;
+    /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+    height: 60vh;
+    right: 0;
+  }
+  .rail {
+    left: 4vw;
+  }
+  .card h1 {
+    font-size: max(14px, 15px);
+  }
+  .card figcaption {
+    /* 固定文字区总高度（含顶部留白）：两行歌名 + 10px 间距 + 一行 14px 歌手。
+     * 每张卡片总高一致，translateY(-50%) 居中时封面就不会因歌名长短上下错位。 */
+    min-height: 83px;
+    height: 83px;
+    /* 封面与文字的距离；已计入上面的总高度。 */
+    padding-top: 16px;
+    /* 歌手内容异常过长时裁切在预留区内，不撑大整张卡片。 */
+    overflow: hidden;
+  }
+  .empty {
+    left: 32vw;
+    right: 7vw;
+  }
+  .empty h1 {
+    font-size: 32px;
+  }
+  .hint {
+    display: none;
+  }
+  footer {
+    inset: auto 20px 15px;
+  }
+  .transport {
+    gap: 8px;
+  }
+  .transport-main {
+    gap: 5px;
+  }
+  .transport-main button {
+    /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+    padding: 8px;
+  }
+  .status {
+    max-width: 38vw;
+    font-size: 10px;
+  }
+  .background-options {
+    /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+  .montage h2 {
+    letter-spacing: -1px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    /* 关键帧动画的名称、周期、曲线与重复方式。 */
+    animation: none !important;
+    /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+    transition: none !important;
+  }
+}
+/* 封面加载前只显示深灰占位；旧图片在重新绑定时立即隐藏。 */
+.cover::before {
+  /* 伪元素的生成内容；空字符串也会创建装饰图层。 */
+  content: '';
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: -12px;
+  background: radial-gradient(ellipse at 35% 30%, #383939, #242525 65%);
+  filter: blur(16px);
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+}
+.cover img,
+.vinyl img,
+.montage img {
+  opacity: 0;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity 160ms ease;
+}
+.cover img {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+}
+.cover img.is-loaded,
+.vinyl img.is-loaded,
+.montage img.is-loaded {
+  opacity: 1;
+}
+.montage img {
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity 100ms ease-out;
+}
+.transport {
+  /* 是否允许弹性子项换行。 */
+  flex-wrap: wrap;
+}
+.status {
+  flex: 1;
+  min-width: 80px;
+}
+.montage-frame {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: 0;
+  display: grid;
+  /* 网格项目的垂直/水平对齐简写。 */
+  place-items: center;
+  /* 向浏览器提示即将变化的属性；不要给大量元素滥加，可能增加图层内存。 */
+  will-change: opacity, transform;
+}
+.montage.landing {
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity var(--montage-fade, 600ms) ease;
+  opacity: 0;
+}
+.montage.landing h2 {
+  /* 关键帧动画的名称、周期、曲线与重复方式。 */
+  animation: land var(--montage-fade, 600ms) ease-out forwards;
+}
+.lyric-adjust {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  /* 空间不足时是否允许压缩；0 表示不压缩，避免按钮或唱片被挤扁。 */
+  flex-shrink: 0;
+  color: #b5b6b1;
+  font-size: 11px;
+}
+.lyric-adjust button {
+  width: 25px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 25px;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 0;
+  line-height: 1;
+  font-size: 15px;
+}
+.lyric-adjust output {
+  min-width: 43px;
+  /* 文字水平对齐。 */
+  text-align: center;
+  /* tabular-nums 使用等宽数字，避免时间/偏移数值变化时抖动。 */
+  font-variant-numeric: tabular-nums;
+}
+
+/* 九卡片画廊：位移与图片下载解耦，节点仅在窗口边缘循环复用。 */
+.card {
+  /* 向浏览器提示即将变化的属性；不要给大量元素滥加，可能增加图层内存。 */
+  will-change: transform;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition:
+    transform 260ms cubic-bezier(0.18, 0.75, 0.2, 1),
+    opacity 260ms;
+}
+.stage {
+  /* 浏览器原生触摸手势处理；none 配合 JS 指针拖动切歌。 */
+  touch-action: none;
+}
+.rail {
+  /* 向浏览器提示即将变化的属性；不要给大量元素滥加，可能增加图层内存。 */
+  will-change: transform;
+}
+.record-deck {
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: relative;
+}
+
+.rail-viewport,
+.station,
+.empty {
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition:
+    opacity 350ms ease,
+    transform 350ms ease;
+}
+.scene::before {
+  /* 伪元素的生成内容；空字符串也会创建装饰图层。 */
+  content: '';
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, #1a0b12 0%, #2d1325 100%);
+  opacity: 0;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: opacity 650ms;
+}
+.backdrop {
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 1;
+  inset: 0;
+}
+.veil {
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 3;
+}
+body.immersive .scene::before {
+  opacity: 1;
+}
+
+body.immersive .rail-viewport,
+body.immersive .empty,
+body.immersive .hint {
+  opacity: 0;
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+}
+body.immersive .station {
+  left: 7vw;
+  width: 86vw;
+  display: grid;
+  /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+  grid-template-columns: 1fr 1fr;
+  gap: 8vw;
+  align-items: center;
+  /* 文字水平对齐。 */
+  text-align: left;
+}
+body.immersive .record-deck {
+  width: min(38vw, 480px);
+  /* 单个网格项目在自己网格区域内的水平对齐。 */
+  justify-self: center;
+}
+body.immersive .vinyl {
+  width: 100%;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+}
+body.immersive .lyric {
+  font-size: clamp(19px, 2vw, 33px);
+  gap: 25px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 260px;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  color: #fff;
+  /* 文字阴影，提高复杂背景上的可读性。 */
+  text-shadow:
+    0 2px 16px #000,
+    0 1px 4px #000;
+}
+body.immersive .lyric > div {
+  line-height: 1.5;
+  /* 最低高度，减少换内容时上下跳动。 */
+  min-height: 1.5em;
+  /* 高度上限，超出后是否滚动由 overflow 决定。 */
+  max-height: 1.5em;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+  display: block;
+  /* 是否保留空白及换行；nowrap 强制单行。 */
+  white-space: nowrap;
+  /* 文字被裁切时的标记；ellipsis 需要配合宽度限制及 overflow。 */
+  text-overflow: ellipsis;
+}
+body.immersive .lyric .secondary {
+  font-size: clamp(13px, 1.2vw, 20px);
+  opacity: 0.4;
+}
+@media (max-width: 800px) {
+  .tools {
+    /* 是否允许弹性子项换行。 */
+    flex-wrap: wrap;
+  }
+  .stage {
+    top: 165px;
+  }
+  body.immersive .station {
+    left: 5vw;
+    width: 90vw;
+    gap: 6vw;
+    /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+    grid-template-columns: 1fr 1fr;
+  }
+  body.immersive .record-deck {
+    width: 38vw;
+  }
+  body.immersive .lyric {
+    font-size: 16px;
+    gap: 15px;
+  }
+  .tools select {
+    /* 弹性布局的初始主轴尺寸。 */
+    flex-basis: 120px;
+  }
+}
+
+/* === V1.0 经典布局与材质还原：仅影响唱片及沉浸模式 === */
+.vinyl {
+  /* 背景底色，在没有背景图片或图片透明处显露。 */
+  background-color: #080808;
+  background-image: repeating-radial-gradient(
+    circle,
+    #080808 0px,
+    #080808 1px,
+    #1a1a1a 1.4px,
+    #090909 2.3px,
+    #080808 3px
+  );
+  border: 1px solid #292929;
+  box-shadow:
+    inset 0 0 0 3px #050505,
+    inset 0 0 22px 5px #000,
+    0 2px 4px #000b,
+    0 24px 50px #0008;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+}
+.vinyl::before {
+  /* 伪元素的生成内容；空字符串也会创建装饰图层。 */
+  content: '';
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  inset: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: inherit;
+  background: conic-gradient(
+    from 20deg,
+    transparent 0deg,
+    #ffffff08 42deg,
+    transparent 67deg,
+    transparent 165deg,
+    #ffffff0b 198deg,
+    transparent 225deg
+  );
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+}
+.vinyl img {
+  inset: 29%;
+  width: 42%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 42%;
+  border: 5px solid #050505;
+  box-shadow: 0 0 0 1px #ffffff20;
+  filter: none;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 1;
+}
+.vinyl::after {
+  inset: 49%;
+  background: radial-gradient(circle at 30% 30%, #eee, #999 45%, #303030 80%);
+  box-shadow: 0 0 0 3px #080808c0;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 2;
+}
+.tonearm {
+  display: none;
+  /* 定位方式：fixed 相对窗口，absolute 相对定位祖先，relative 作为子元素定位参照。 */
+  position: absolute;
+  top: -10%;
+  right: -16%;
+  /* 图层顺序，较大通常覆盖较小；实际还受祖先堆叠上下文影响。 */
+  z-index: 5;
+  width: 44%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 75%;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: visible;
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+  transform-origin: 72.22% 12%;
+  transform: rotate(-24deg);
+  filter: drop-shadow(7px 12px 6px #0009);
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition:
+    transform 0.8s cubic-bezier(0.22, 0.61, 0.36, 1),
+    filter 0.8s;
+}
+body.immersive .tonearm {
+  display: block;
+}
+body.immersive .record-deck.is-playing .tonearm {
+  transform: rotate(2deg);
+  filter: drop-shadow(3px 4px 2px #0009);
+}
+.listening-panel {
+  min-width: 0;
+}
+.song-heading,
+.music-spectrum {
+  display: none;
+}
+body.immersive .station {
+  left: 8vw;
+  width: 84vw;
+  /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+  grid-template-columns: 44% 48%;
+  gap: 8%;
+  align-items: center;
+}
+body.immersive .record-deck {
+  width: min(33vw, 57vh, 650px);
+  /* 单个网格项目在自己网格区域内的水平对齐。 */
+  justify-self: start;
+}
+body.immersive .listening-panel {
+  width: 100%;
+  /* 文字水平对齐。 */
+  text-align: left;
+}
+body.immersive .song-heading {
+  display: block;
+  margin-bottom: clamp(24px, 4vh, 55px);
+}
+.record-eyebrow {
+  display: block;
+  font-size: 11px;
+  color: #bbb;
+  letter-spacing: 0.18em;
+  margin-bottom: 18px;
+}
+#immersiveTitle {
+  /* 字体优先级从左到右；前一字体未安装时使用后一字体。 */
+  font-family: 'Yu Mincho', 'Songti SC', 'Noto Serif CJK SC', Georgia, serif;
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 400;
+  font-size: clamp(28px, 3vw, 64px);
+  line-height: 1.35;
+  letter-spacing: 0.06em;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0 0 14px;
+  color: #f7f6f3;
+  /* 长歌名/连续字符的换行方式，anywhere 可在必要时任意处折行。 */
+  overflow-wrap: anywhere;
+  display: -webkit-box;
+  /* 标题最多显示的行数，配合 box-orient 和 overflow 裁切。 */
+  -webkit-line-clamp: 2;
+  /* 同时声明标准属性，兼容新版实现并消除 VS Code 的 vendorPrefix 提示。 */
+  line-clamp: 2;
+  /* 多行截断使用的排布方向。 */
+  -webkit-box-orient: vertical;
+  /* 超出容器的内容如何处理；hidden 裁切，auto 超出时滚动。 */
+  overflow: hidden;
+}
+#immersiveArtist {
+  font-size: clamp(13px, 1.1vw, 19px);
+  line-height: 1.5;
+  /* 字重：数字越大通常越粗，具体效果取决于字体是否支持对应字重。 */
+  font-weight: 400;
+  color: #bdbbc1;
+  letter-spacing: 0.035em;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+}
+body.immersive .lyric {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: auto;
+  /* 最低高度，减少换内容时上下跳动。 */
+  min-height: 150px;
+  gap: 24px;
+  /* 主轴对齐；space-between 把两端元素分开，center 居中。 */
+  justify-content: center;
+  font-size: clamp(20px, 1.9vw, 36px);
+}
+body.immersive .lyric .secondary {
+  font-size: clamp(14px, 1.25vw, 23px);
+  opacity: 0.38;
+}
+body.immersive .music-spectrum {
+  display: block;
+  width: 100%;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 42px;
+  /* 与上方元素的外部间距。 */
+  margin-top: 25px;
+  opacity: 0.6;
+  /* none 让鼠标穿过装饰层，避免遮住按钮。 */
+  pointer-events: none;
+}
+/* 控制栏完全透明，不另铺底色或厚重玻璃。 */
+footer,
+.timeline,
+.transport {
+  background: transparent !important;
+  backdrop-filter: none;
+  box-shadow: none;
+}
+footer {
+  /* 顶部边框，可用于底栏分隔线。 */
+  border-top: 0;
+  /* 内容与容器顶部的留白。 */
+  padding-top: 12px;
+}
+footer button,
+footer select {
+  background: transparent;
+  /* 边框颜色。 */
+  border-color: #ffffff1c;
+}
+footer button:hover {
+  background: #ffffff08;
+}
+body.immersive .status {
+  color: #a6a3ab;
+  font-size: 10px;
+  max-width: 26vw;
+}
+.timeline input[type='range'] {
+  /* 关闭浏览器默认控件外观，以便自定义轨道与圆点。 */
+  appearance: none;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 2px;
+  border: 0;
+  background: #ffffff33;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 2px;
+}
+.timeline input[type='range']::-webkit-slider-thumb {
+  /* 关闭浏览器默认控件外观，以便自定义轨道与圆点。 */
+  appearance: none;
+  width: 8px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 8px;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  background: #eee;
+}
+.timeline input[type='range']::-moz-range-thumb {
+  width: 8px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 8px;
+  border: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  background: #eee;
+}
+@media (max-width: 800px) {
+  body.immersive .station {
+    left: 6vw;
+    width: 88vw;
+    /* 网格列数与每列宽度；minmax(0,1fr) 允许内容收缩。 */
+    grid-template-columns: 42% 50%;
+    gap: 8%;
+  }
+  body.immersive .record-deck {
+    width: min(35vw, 45vh);
+  }
+  body.immersive .song-heading {
+    margin-bottom: 22px;
+  }
+  .record-eyebrow {
+    font-size: 9px;
+    margin-bottom: 12px;
+  }
+  #immersiveTitle {
+    font-size: clamp(21px, 4vw, 32px);
+  }
+  body.immersive .lyric {
+    /* 最低高度，减少换内容时上下跳动。 */
+    min-height: 110px;
+    gap: 17px;
+    font-size: 16px;
+  }
+  body.immersive .lyric .secondary {
+    font-size: 11px;
+  }
+  body.immersive .music-spectrum {
+    /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+    height: 30px;
+    /* 与上方元素的外部间距。 */
+    margin-top: 15px;
+  }
+}
+@media (max-height: 650px) {
+  body.immersive .song-heading {
+    margin-bottom: 18px;
+  }
+  body.immersive .lyric {
+    /* 最低高度，减少换内容时上下跳动。 */
+    min-height: 95px;
+    gap: 14px;
+  }
+  body.immersive .music-spectrum {
+    /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+    height: 24px;
+    /* 与上方元素的外部间距。 */
+    margin-top: 12px;
+  }
+  #immersiveTitle {
+    font-size: clamp(24px, 3vw, 40px);
+  }
+}

@@ -31,19 +31,22 @@ test('检查后创建未授权歌单，仅收集未入选的已检查歌曲', ()
   assert.equal(localPlaylist(s), null);
   recordAccess(s, a, unknown);
   recordAccess(s, b, allowed);
-  assert.equal(localPlaylist(s).name, '未授权的音乐');
+  assert.equal(localPlaylist(s).name, '暂不可播放');
   assert.deepEqual(
     unauthorizedTracks(s).map((t) => t.title),
-    ['a'],
+    ['a', 'b'],
   );
   assert.equal(s.library.get('p').length, 3);
 });
-test('重试通过后移出未授权歌单，已购无音源也不放入其中', () => {
+test('已购无音源仍可查看故障原因，音源恢复后移出虚拟歌单', () => {
   const s = session();
   const [a] = registerTracks(s, 'p', [row('a')]);
   recordAccess(s, a, unknown);
   assert.equal(unauthorizedTracks(s).length, 1);
   recordAccess(s, a, { ...allowed, eligibilityState: 'allowed', state: 'unknown' });
+  assert.equal(unauthorizedTracks(s).length, 1);
+  assert.equal(a.entitlement, 'purchased');
+  recordAccess(s, a, { ...allowed, playbackState: 'allowed' });
   assert.equal(unauthorizedTracks(s).length, 0);
   assert.equal(localPlaylist(s).count, 0);
 });

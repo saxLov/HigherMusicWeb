@@ -19,6 +19,7 @@ export function applyAccessResult(track, result) {
   track.playbackState = result.playbackState;
   track.playbackReason = result.playbackReason;
   track.accountWarnings = result.accountWarnings;
+  track.playbackIdentity = result.playbackIdentity;
 }
 /* 判定账号资格是否满足，不要求当次音源也成功；音源问题应另外读取 playbackState。 */
 export const matchesAccount = (track) =>

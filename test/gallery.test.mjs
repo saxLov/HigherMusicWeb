@@ -8,7 +8,7 @@ import vm from 'node:vm';
 import { coverUrl, backgroundFile } from '../lib/gallery.mjs';
 
 const html = await readFile(new URL('../public/index.html', import.meta.url), 'utf8');
-const script = await readFile(new URL('../public/app.js', import.meta.url), 'utf8');
+const script = (await Promise.all(['player-core.js', 'listening.js', 'api-client.js', 'lyrics.js', 'backgrounds.js', 'search.js', 'app.js'].map((file) => readFile(new URL('../public/' + file, import.meta.url), 'utf8')))).join('\n');
 /* 前端测试环境：用最小 DOM、图片、媒体、localStorage 和计时器替身执行真实 app.js。
  * frames 记录快闪歌名，delays 记录等待毫秒数；测试加速等待，不衡量真实屏幕动画观感。 */
 function harness({ autoImages = true, savedOffset } = {}) {
@@ -121,6 +121,7 @@ function harness({ autoImages = true, savedOffset } = {}) {
     console,
     AbortController,
     DOMException,
+    Event,
     Image: class {
       set src(value) {
         this.source = value;
@@ -136,6 +137,8 @@ function harness({ autoImages = true, savedOffset } = {}) {
     },
     Option: class {},
     performance,
+    queueMicrotask,
+    crypto: { randomUUID: () => "12345678-1234-1234-1234-123456789012" },
     setTimeout: (fn, ms) => {
       delays.push(ms);
       return ms >= 10000 ? 0 : setTimeout(fn, 0);
@@ -186,6 +189,85 @@ const flush = () => new Promise((resolve) => setImmediate(resolve));
 test('单文件语法正确并且主画廊永久只有九张卡片', () => {
   assert.equal((html.match(/<figure\b/g) || []).length, 9);
   assert.doesNotThrow(() => harness());
+});
+test('同步开关默认开启并持久化；账号退出取消排队历史', async () => {
+  const h = harness();
+  assert.equal(h.get('historySync').checked, true);
+  h.run("$('historySync').checked=false;$('historySync').onchange()");
+  assert.equal(h.storage.get('higherweb.historySync.v1'), 'false');
+  assert.equal(h.run('listening.enabled'), false);
+  h.run("$('historySync').checked=true;$('historySync').onchange();songs=[{id:'a',hash:'a'.repeat(32)}];listening.begin(songs[0],audio)");
+  const pending = h.run("listening.send({songId:'a',hash:'a'.repeat(32),playbackId:listening.round.playbackId}).catch(e=>e.name)");
+  h.run('listening.cancelPending();stopAudio()');
+  assert.equal(await pending, 'AbortError');
+});
+test('停止后继续仅检查尚未完成的歌曲，不调用播放或历史接口', async () => {
+  const h = harness();
+  await flush();
+  h.run("rawTracks=[{id:'a',hash:'a',title:'A'},{id:'b',hash:'b',title:'B',cover:'https://example.com/b.jpg'}];checkedIds.add('a');songs=[{id:'a',title:'A'}];globalThis.requested=[];globalThis.fetch=async(url)=>{requested.push(url);return {ok:true,json:async()=>({state:'allowed',playbackState:'allowed',playable:true})}}");
+  await h.run('checkAll()');
+  assert.equal(h.run('JSON.stringify(requested)'), '["/api/inspect?track=b"]');
+  assert.equal(h.run('songs.length'), 2);
+});
+test('全量检查完成后顶部重新检查会真正请求，并刷新一次账号权益', async () => {
+  const h = harness();
+  await flush();
+  h.run("rawTracks=[{id:'a',hash:'a',title:'A',cover:'https://example.com/a.jpg'},{id:'b',hash:'b',title:'B',cover:'https://example.com/b.jpg'}];checkedIds.add('a');checkedIds.add('b');globalThis.requested=[];globalThis.fetch=async(url)=>{requested.push(url);return {ok:true,json:async()=>({state:'allowed',playbackState:'allowed',playable:true})}};$('check').onclick()");
+  for (let n = 0; n < 8; n++) await flush();
+  assert.equal(h.run('JSON.stringify(requested)'), '["/api/inspect?track=a&fresh=1&accountFresh=1","/api/inspect?track=b&fresh=1"]');
+});
+
+test('已达标历史排在慢检查后，正常下一首不会取消原歌曲的提交', async () => {
+  const h = harness();
+  await flush();
+  h.run("songs=[{id:'a',title:'A',hash:'a'.repeat(32)},{id:'b',title:'B',hash:'b'.repeat(32)}];index=0;listening.begin(songs[0],audio);globalThis.reports=[];globalThis.fetch=(url,options)=>url.includes('slow')?new Promise(resolve=>globalThis.release=resolve):Promise.resolve({ok:true,json:async()=>{if(url.includes('report_history'))reports.push(JSON.parse(options.body));return {ok:true,accepted:true}}});playCurrent=async()=>{}");
+  const blocker = h.run("request('inspect?track=slow','POST')");
+  await flush();
+  const report = h.run("listening.send({songId:'a',hash:'a'.repeat(32),playbackId:listening.round.playbackId})");
+  h.run("goTo(1,false);release({ok:true,json:async()=>({})})");
+  await blocker;
+  await report;
+  assert.equal(h.run('reports.length'), 1);
+  assert.equal(h.run('reports[0].songId'), 'a');
+  assert.equal(h.run('index'), 1);
+});
+
+test('8秒中断后自动恢复保留轮次和累计时间，再听8秒只上报一次', async () => {
+  const h = harness();
+  await flush();
+  h.run("songs=[{id:'a',title:'A',hash:'a'.repeat(32)}];index=0;loadedId='a';audio.paused=false;audio.readyState=4;audio.currentTime=8;globalThis.clock=0;listening.now=()=>clock;listening.begin(songs[0],audio);listening.round.seconds=8;globalThis.originalRound=listening.round;globalThis.reports=[];loadSource=async()=>{audio.paused=false;audio.currentTime=0};globalThis.fetch=async(url,options)=>({ok:true,json:async()=>{if(url.includes('report_history')){reports.push(JSON.parse(options.body));return {ok:true,accepted:true}}return {state:'allowed',playbackState:'allowed',url:'/api/audio?ticket='+'a'.repeat(48),expectedDuration:240}}})");
+  await h.run('playCurrent(8,true)');
+  assert.equal(h.run('listening.round === originalRound'), true);
+  assert.equal(h.run('listening.round.seconds'), 8);
+  assert.equal(h.run('audio.currentTime'), 8);
+  for (let n = 0; n < 8; n++) h.run('clock+=1000;audio.currentTime+=1;listening.tick(audio)');
+  for (let n = 0; n < 4; n++) await flush();
+  assert.equal(h.run('reports.length'), 1);
+  assert.equal(h.run('reports[0].playbackId === originalRound.playbackId'), true);
+  await h.run('playCurrent(16,true)');
+  for (let n = 0; n < 8; n++) h.run('clock+=1000;audio.currentTime+=1;listening.tick(audio)');
+  await flush();
+  assert.equal(h.run('reports.length'), 1);
+});
+
+test('自动定位不算用户拖动，真实拖动仍永久取消本轮', () => {
+  const h = harness();
+  h.run("songs=[{id:'a',hash:'a'.repeat(32)}];audio.paused=false;listening.begin(songs[0],audio);automaticSeek={version:playVersion,target:8};audio.currentTime=8;audio.dispatchEvent(new Event('seeking'))");
+  assert.equal(h.run('listening.round.invalid'), false);
+  h.run("automaticSeek=null;audio.currentTime=60;audio.dispatchEvent(new Event('seeking'))");
+  assert.equal(h.run('listening.round.invalid'), true);
+});
+test('中途故障最多恢复一次并携带进度，切歌后旧恢复任务失效', async () => {
+  const h = harness();
+  h.run("songs=[{id:'a'}];loadedId='a';audio.paused=false;audio.currentTime=27;globalThis.restores=[];playCurrent=async(...args)=>restores.push(args);scheduleRecovery(true)");
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(h.run('JSON.stringify(restores)'), '[[27,true]]');
+  h.run('scheduleRecovery(true)');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(h.run('restores.length'), 1);
+  h.run('recoveryAttempts=0;scheduleRecovery(true);playVersion++');
+  await new Promise((r) => setTimeout(r, 10));
+  assert.equal(h.run('restores.length'), 1);
 });
 test('清洗歌名歌手与网络封面；待确认和无音源不能进入画廊', () => {
   const h = harness();

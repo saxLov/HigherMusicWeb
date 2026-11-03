@@ -3,6 +3,8 @@
  * 登录凭证只存在内存 sessions，重启后需扫码；前端拿到的是会话 Cookie，不是平台 token。
  * 阅读顺序：连接组件包装 → 会话配置 → 静态资源 → 来源校验/会话 → 登录 → 已登录接口。 */
 import http from 'node:http';
+import { createHistoryReporter, readHistoryBody, HistoryError } from './lib/history.mjs';
+import { createInspector } from './lib/inspection.mjs';
 import { randomBytes, createHash } from 'node:crypto';
 import path from 'node:path';
 import { mediaTickets, proxyAudio } from './lib/media-proxy.mjs';
@@ -24,24 +26,35 @@ import {
   localPlaylist,
   recordAccess,
 } from './lib/library.mjs';
-/* call()：懒加载 provider 适配层再转发参数；保持路由代码不直接依赖第三方组件。 */
-async function call(...args) {
-  return (await adapter('provider')).call(...args);
+/* providerCall()：懒加载 provider 适配层再转发参数；保持路由代码不直接依赖第三方组件。 */
+async function providerCall(...args) {
+  return (await loadAdapter('provider')).call(...args);
 }
-/* adapter()：以模块文件修改时间作为 import 查询参数，文件更新后可读取新版本；不扫描任意客户端路径。 */
-async function adapter(name) {
+/* loadAdapter()：以模块文件修改时间作为 import 查询参数，文件更新后可读取新版本；不扫描任意客户端路径。 */
+async function loadAdapter(name) {
   const url = new URL(`./lib/${name}.mjs`, import.meta.url);
   const file = await stat(url);
   return import(url.href + '?v=' + file.mtimeMs);
 }
 /* 【服务配置】内存会话表；port/host 可由 PORT/HOST 环境变量调整，publicRoot 固定指向 public。 */
-const sessions = new Map();
 const port = Number(process.env.PORT || 3211);
 const host = process.env.HOST || '127.0.0.1';
+export function createMusicServer({
+  request = providerCall,
+  inspectAccess,
+  adapters = loadAdapter,
+  audioProxy = proxyAudio,
+} = {}) {
+const call = request;
+const adapter = adapters;
+const reportHistory = createHistoryReporter(call);
+const inspect = createInspector(inspectAccess || (async (...args) =>
+  (await adapter('access')).checkAccess(...args)));
+const sessions = new Map();
 const publicRoot = new URL('./public/', import.meta.url);
 /* 会话闲置 4 小时过期；每分钟清理一次，unref 避免清理计时器单独阻止进程退出。 */
 const expiry = 4 * 60 * 60 * 1000;
-setInterval(() => {
+const cleanup = setInterval(() => {
   for (const [key, s] of sessions)
     if (Date.now() - s.touched > expiry) sessions.delete(key);
 }, 60000).unref();
@@ -59,7 +72,7 @@ async function pages(s, method, params = {}) {
   return collectPages((page, pagesize) => call(s, method, { ...params, page, pagesize }));
 }
 /* 【HTTP 入口】先处理静态资源，再处理 /api/。测试可导入 server 并监听临时端口。 */
-export const server = http.createServer(async (req, res) => {
+const server = http.createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
   res.setHeader('Referrer-Policy', 'no-referrer');
@@ -99,6 +112,15 @@ export const server = http.createServer(async (req, res) => {
         '/track-state.mjs': 'track-state.mjs',
         '/queue.mjs': 'queue.mjs',
         '/style.css': 'style.css',
+        '/player-core.js': 'player-core.js',
+        '/listening.js': 'listening.js',
+        '/api-client.js': 'api-client.js',
+        '/lyrics.js': 'lyrics.js',
+        '/backgrounds.js': 'backgrounds.js',
+        '/search.js': 'search.js',
+        '/styles/base.css': 'styles/base.css',
+        '/styles/player.css': 'styles/player.css',
+        '/styles/lyrics.css': 'styles/lyrics.css',
       };
       const file = paths[u.pathname];
       if (!file) return json(res, 404, { error: '页面不存在' });
@@ -145,7 +167,7 @@ export const server = http.createServer(async (req, res) => {
       return json(res, 200, { ready: ready(), user: s.user ?? null });
     /* 音频流单独验证 ticket，不占会话业务锁，避免正在播放时阻塞其他 API。 */
     if (action === 'GET /api/audio')
-      return proxyAudio(req, res, s, u.searchParams.get('ticket'));
+      return audioProxy(req, res, s, u.searchParams.get('ticket'));
     /* 销毁服务端会话并让浏览器 Cookie 过期，旧音频凭据也随会话失效。 */
     if (action === 'POST /api/logout') {
       sessions.delete(sid);
@@ -154,6 +176,14 @@ export const server = http.createServer(async (req, res) => {
         'music_session=; HttpOnly; SameSite=Strict; Path=/; Max-Age=0',
       );
       return json(res, 200, { ok: true });
+    }
+    // 独立历史上报使用账号级专用限流，不占播放/歌单业务锁。
+    if (action === 'POST /api/report_history') {
+      if (!s.user) return json(res, 401, { error: '请先扫码登录' });
+      const body = await readHistoryBody(req);
+      // 读取请求体期间另一标签页可能已经退出；旧 session 不能再发起上报。
+      if (sessions.get(sid) !== s || !s.user) return json(res, 401, { error: '登录已失效' });
+      return json(res, 200, await reportHistory(s, body));
     }
     /* 【会话业务锁】同一账号操作串行执行；finally 一定释放。前端 request 队列与此配合。 */
     if (s.busy) return json(res, 429, { error: '上一个操作尚未完成，请稍候。' });
@@ -280,6 +310,13 @@ export const server = http.createServer(async (req, res) => {
         );
         return json(res, 200, { tracks });
       }
+      // 检查摘要不生成票据，不上报历史；主动复查可跳过短期缓存。
+      if (action === 'POST /api/inspect') {
+        const track = s.tracks.get(u.searchParams.get('track'));
+        if (!track) return json(res, 404, { error: '歌曲不属于当前会话' });
+        const result = await inspect(s, track, u.searchParams.get('fresh') === '1', u.searchParams.get('accountFresh') === '1');
+        return json(res, 200, { ...result, localPlaylist: recordAccess(s, track, result) });
+      }
       /* 【权益/播放】都调用同一检查器；play 额外把完整音源换成同源 ticket，并保存此次权益结果。 */
       if (action === 'POST /api/check' || action === 'POST /api/play') {
         const track = s.tracks.get(u.searchParams.get('track'));
@@ -296,9 +333,13 @@ export const server = http.createServer(async (req, res) => {
       s.busy = false;
     }
   } catch (e) {
-    json(res, 502, { error: e instanceof Error ? e.message : '请求失败，请重试' });
+    json(res, e instanceof HistoryError ? e.status : 502, { error: e instanceof Error ? e.message : '请求失败，请重试' });
   }
 });
+server.on('close', () => clearInterval(cleanup));
+return server;
+}
+export const server = createMusicServer();
 /* 直接执行此文件才启动默认端口；被测试导入时只导出 server，不占用真实播放器端口。 */
 if (process.argv[1] === fileURLToPath(import.meta.url))
   server.listen(port, host, () => console.log(`音乐网页已启动：http://${host}:${port}`));

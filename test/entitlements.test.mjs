@@ -48,14 +48,14 @@ test('平台明确未上架的版本与购买资格分开处理', () =>
     ).state,
     'unavailable',
   ));
-test('会员字段为字符串时仍结合本曲授权判断会员权益', () =>
+test('会员有效与资源存在不能证明单独付费版本被会员覆盖', () =>
   assert.equal(
     classify(
       {},
       { quality: '128', status: 1, pay_type: 3, price: 200 },
       { vip: { is_vip: '1' } },
     ).entitlement,
-    'vip',
+    'unknown',
   ));
 test('已购专辑只覆盖相同专辑标识', () => {
   assert.equal(
