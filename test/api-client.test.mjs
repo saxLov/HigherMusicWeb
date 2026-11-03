@@ -1,0 +1,30 @@
+import { test } from 'node:test';
+import assert from 'node:assert/strict';
+import vm from 'node:vm';
+import { readFile } from 'node:fs/promises';
+const source = await readFile(new URL('../public/api-client.js', import.meta.url), 'utf8');
+test('播放优先于批量检查，JSON正确编码；过期上报出队前取消，失败不阻断后续请求', async () => {
+  const calls = [], resolvers = [];
+  const context = vm.createContext({ AbortController, DOMException, queueMicrotask, setTimeout, clearTimeout,
+    fetch: (url, options) => { calls.push({ url, options }); return new Promise((resolve) => resolvers.push(resolve)); } });
+  vm.runInContext(source, context);
+  const request = context.HigherApi.createApiClient('');
+  let valid = true;
+  const inspect = request('inspect?track=1', 'POST', () => true, { priority: -10 });
+  const play = request('play?track=1', 'POST');
+  const report = request('report_history', 'POST', () => valid, { body: { songId: 'a' }, priority: 5 });
+  const canceled = request('report_history', 'POST', () => false, { priority: 5 }).catch((e) => e.name);
+  await new Promise(setImmediate);
+  assert.equal(calls[0].url, '/api/play?track=1');
+  resolvers.shift()({ ok: true, json: async () => ({ ok: true }) }); await play;
+  await new Promise(setImmediate);
+  assert.equal(calls[1].url, '/api/report_history');
+  assert.equal(calls[1].options.body, '{"songId":"a"}');
+  assert.equal(calls[1].options.credentials, 'include');
+  const rejected = assert.rejects(report, /失败/);
+  resolvers.shift()({ ok: false, json: async () => ({ error: '失败' }) }); await rejected;
+  await new Promise(setImmediate);
+  assert.equal(await canceled, 'AbortError');
+  assert.equal(calls[2].url, '/api/inspect?track=1');
+  resolvers.shift()({ ok: true, json: async () => ({ playable: true }) }); await inspect;
+});

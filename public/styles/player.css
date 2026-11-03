@@ -1,0 +1,219 @@
+/* === 原色画廊 / 沉浸模式视觉微调（放在所有旧样式之后） === */
+/* 保留图片加载前 opacity:0 的占位机制；只取消卡片整体的暗化。 */
+.rail-viewport,
+.rail,
+.card,
+.cover {
+  filter: none;
+}
+.card,
+.card[data-offset='0'] {
+  opacity: 1;
+}
+.cover img,
+.vinyl img,
+.background-options img,
+.montage img {
+  filter: none;
+  /* 与后方图层的颜色混合方式，normal 保留普通合成。 */
+  mix-blend-mode: normal;
+}
+
+/* Image169 原图清晰显示，仅暗化；背景不放大、不模糊、不叠加专辑封面。 */
+body.immersive .backdrop {
+  inset: 0;
+  filter: brightness(0.4);
+}
+.veil {
+  background: linear-gradient(90deg, #12121240, transparent 60%, #12121220);
+}
+body.immersive .veil {
+  background: none;
+}
+
+/* 左侧占 40%，留白 18%，文字占 42%，合计 100%。 */
+body.immersive .station {
+  /* 唱片与唱臂整体缩放倍率，不改变唱片旋转的 transform。 */
+  --disc-scale: 0.75;
+  /* 沉浸布局中唱机外壳占比。 */
+  --deck-share: 40%;
+  /* 沉浸布局中文字面板占比。 */
+  --panel-share: 42%;
+  /* 唱片与右侧文字的留白比例。 */
+  --column-gap: 18%;
+  left: 4vw;
+  width: 92vw;
+  display: flex;
+  gap: var(--column-gap);
+  align-items: center;
+}
+body.immersive .record-deck {
+  flex: 0 0 var(--deck-share);
+  width: var(--deck-share);
+  max-width: min(33vw, 57vh, 650px);
+  min-width: 0;
+  transform: scale(var(--disc-scale));
+  transform-origin: left center;
+}
+body.immersive .vinyl {
+  width: 100%;
+  max-width: 100%;
+  opacity: 0.85;
+}
+body.immersive .listening-panel {
+  flex: 0 0 var(--panel-share);
+  width: var(--panel-share);
+  min-width: 0;
+  margin-left: auto;
+}
+body.immersive #immersiveTitle {
+  font-size: clamp(23px, 2.15vw, 44px);
+  line-height: 1.4;
+  letter-spacing: 0.035em;
+  margin-bottom: 12px;
+}
+
+/* 完全透明的浮动控制栏，包含进度条两侧的外壳。 */
+footer,
+.timeline,
+.transport {
+  background: transparent !important;
+  background-image: none !important;
+  backdrop-filter: none;
+  box-shadow: none;
+  border: 0;
+}
+
+@media (max-width: 800px) {
+  body.immersive .station {
+    left: 3vw;
+    width: 94vw;
+    /* 沉浸布局中唱机外壳占比。 */
+    --deck-share: 37%;
+    /* 唱片与右侧文字的留白比例。 */
+    --column-gap: 10%;
+    /* 小屏右侧文字占比：确保歌词左边缘始终在屏幕中线右侧。 */
+    --panel-share: 47%;
+  }
+  body.immersive .record-deck {
+    max-width: min(35vw, 45vh);
+  }
+  body.immersive #immersiveTitle {
+    font-size: clamp(18px, 3.1vw, 26px);
+  }
+}
+@media (max-height: 650px) and (min-width: 801px) {
+  body.immersive #immersiveTitle {
+    font-size: clamp(22px, 2.15vw, 34px);
+  }
+}
+
+/* 音量：透明外壳、细轨道与小圆点，左侧使用原生 SVG 扬声器图标。 */
+.volume-control {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex: 0 0 128px;
+  min-width: 0;
+  color: #e7e6e1;
+  background: transparent;
+}
+.volume-icon {
+  display: flex;
+  flex: 0 0 18px;
+  opacity: 0.8;
+}
+.volume-icon svg {
+  display: block;
+  width: 18px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 18px;
+}
+.volume-control .volume {
+  /* 音量已填充百分比，由 syncVolume 动态更新。 */
+  --volume-level: 70%;
+  /* 关闭浏览器默认控件外观，以便自定义轨道与圆点。 */
+  appearance: none;
+  /* Chromium/WebKit 的原生控件外观开关。 */
+  -webkit-appearance: none;
+  display: block;
+  flex: 1;
+  min-width: 0;
+  width: 100%;
+  max-width: none;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 24px;
+  /* 外边距；auto 常用来居中或占据弹性剩余空间。 */
+  margin: 0;
+  /* 内边距；两项为上下/左右，四项为上/右/下/左。 */
+  padding: 0;
+  border: 0;
+  background: transparent;
+  /* 鼠标指针样式，pointer 提示可点击。 */
+  cursor: pointer;
+}
+.volume-control .volume::-webkit-slider-runnable-track {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 2px;
+  border: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 2px;
+  background: linear-gradient(
+    to right,
+    #efeeeb 0 var(--volume-level),
+    #ffffff33 var(--volume-level) 100%
+  );
+}
+.volume-control .volume::-webkit-slider-thumb {
+  /* 关闭浏览器默认控件外观，以便自定义轨道与圆点。 */
+  appearance: none;
+  /* Chromium/WebKit 的原生控件外观开关。 */
+  -webkit-appearance: none;
+  width: 8px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 8px;
+  /* 与上方元素的外部间距。 */
+  margin-top: -3px;
+  border: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  background: #efeeeb;
+  box-shadow: none;
+  /* 属性变化的过渡；时间单位 ms/秒，后续同选择器声明可能覆盖本处时长。 */
+  transition: transform 150ms ease;
+}
+.volume-control .volume:hover::-webkit-slider-thumb {
+  transform: scale(1.25);
+}
+.volume-control .volume::-moz-range-track {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 2px;
+  border: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 2px;
+  background: #ffffff33;
+}
+.volume-control .volume::-moz-range-progress {
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 2px;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 2px;
+  background: #efeeeb;
+}
+.volume-control .volume::-moz-range-thumb {
+  width: 8px;
+  /* 元素高度；vh 依窗口高度，auto 随内容决定。 */
+  height: 8px;
+  border: 0;
+  /* 圆角；50% 常用于圆形唱片或按钮。 */
+  border-radius: 50%;
+  background: #efeeeb;
+  box-shadow: none;
+}
+@media (max-width: 800px) {
+  .volume-control {
+    /* 弹性布局的初始主轴尺寸。 */
+    flex-basis: 96px;
+    gap: 8px;
+  }
+}

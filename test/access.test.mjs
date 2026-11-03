@@ -78,6 +78,7 @@ test('相关音质缺少专辑标识时沿用当前版本再请求', async () =>
   const attempts = [];
   const check = createAccessChecker(
     provider({
+      user_purchased_songs: () => ({ data: { info: [{ album_audio_id: 123 }] } }),
       privilege_lite: () => ({
         data: [
           {

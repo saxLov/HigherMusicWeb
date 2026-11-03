@@ -6,6 +6,8 @@ import assert from 'node:assert/strict';
 import { loadAudio } from '../public/media.mjs';
 /* 模拟媒体事件的播放器；测试主动派发 playing/error，不会连接真实音源。 */
 class AudioStub extends EventTarget {
+  duration = 240;
+  pause() {}
   play() {
     return Promise.resolve();
   }
@@ -55,4 +57,14 @@ test('浏览器禁止自动播放时保留明确错误', async () => {
     loadAudio(audio, 'https://example.com/a', new AbortController().signal),
     { name: 'NotAllowedError' },
   );
+});
+test('实际音频短于预期时即使playing也拒绝，并清理本次监听', async () => {
+  const audio = new AudioStub(); audio.duration = 30;
+  const result = loadAudio(audio, 'https://example.com/preview', new AbortController().signal, 15000, 240);
+  audio.dispatchEvent(new Event('playing'));
+  await assert.rejects(result, /不完整/);
+  audio.duration = 240;
+  const next = loadAudio(audio, 'https://example.com/full', new AbortController().signal, 15000, 240);
+  audio.dispatchEvent(new Event('loadedmetadata')); audio.dispatchEvent(new Event('playing'));
+  await next;
 });

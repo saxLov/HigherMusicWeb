@@ -1,0 +1,213 @@
+/* ===== 歌词面板隔离：透明文字阴影与三行渐隐（最终规则） =====
+ * lyric-shell 在正常布局中预留三行空间；内部 lyric 再绝对居中。
+ * 这样画廊里的歌词不会压回唱片，沉浸模式的歌名和频谱也不会因歌词脱离文档流而塌陷。
+ * shell 完全透明并取消区域模糊；歌词用文字阴影增强对比，内部 mask 保留上下渐隐。 */
+.lyric-shell {
+  /* 画廊每行 36px，面板固定 108px；想调面板高度只需改行高。 */
+  --lyric-row-height: 36px;
+  position: relative;
+  z-index: 99;
+  height: calc(3 * var(--lyric-row-height));
+  min-height: calc(3 * var(--lyric-row-height));
+  width: 100%;
+  /* 取消黑底及矩形模糊区域，让背景自然穿透；清晰度交给每行文字的阴影。 */
+  background: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+/* 同时列出沉浸选择器，明确覆盖前面旧版本中的 height:auto、min-height 与 gap。 */
+.lyric,
+body.immersive .lyric {
+  /* 相对于 shell 绝对垂直居中，视觉层高于下方经过的画廊卡片。 */
+  position: absolute;
+  z-index: 99;
+  top: 50%;
+  left: 0;
+  width: 100%;
+  transform: translateY(-50%);
+  height: calc(3 * var(--lyric-row-height));
+  min-height: 0;
+  margin: 0;
+  padding: 0 14px;
+  /* 三个相同高度的格子只显示上一句、当前句、下一句，不允许自动扩高。 */
+  display: grid;
+  grid-template-rows: repeat(3, var(--lyric-row-height));
+  gap: 0;
+  overflow: hidden;
+  /* 歌词层同样透明；mask 仅负责文字的上下渐隐。 */
+  background: transparent;
+  -webkit-mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+  mask-image: linear-gradient(to bottom, transparent, black 20%, black 80%, transparent);
+}
+
+.lyric > div,
+body.immersive .lyric > div {
+  /* 紧贴字形的深色阴影：近处描清字边，远处柔和扩散，不形成矩形背景。 */
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 1), 0 2px 10px rgba(0, 0, 0, 0.9), 0 0 18px rgba(0, 0, 0, 0.75);
+  /* 固定单行槽位；覆盖旧的按字号计算的 min/max-height，长歌词只省略、不换行。 */
+  display: block;
+  height: var(--lyric-row-height);
+  min-height: 0;
+  max-height: none;
+  line-height: var(--lyric-row-height);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.lyric #lyricCurrent {
+  /* 当前句相对歌词容器放大 8%，亮白加粗；不影响画廊的歌手字号。 */
+  color: #fff;
+  opacity: 1;
+  font-size: 1.08em;
+  font-weight: 600;
+}
+
+.lyric .secondary,
+body.immersive .lyric .secondary {
+  /* 上下句保留各模式原有字号，仅统一为半透明；边缘另由 mask 继续淡出。 */
+  opacity: 0.5;
+}
+
+body.immersive .lyric-shell {
+  /* 沉浸歌词字号更大，行槽随窗口高度调整，三行总高仍严格为三倍行高。 */
+  --lyric-row-height: clamp(38px, 5vh, 56px);
+}
+
+@media (max-width: 800px) {
+  .lyric-shell,
+  body.immersive .lyric-shell {
+    /* 小屏三行总高 96px，避免挤占标题和底部频谱。 */
+    --lyric-row-height: 32px;
+  }
+  .lyric,
+  body.immersive .lyric {
+    /* 窄面板缩小左右留白，把更多空间留给歌词内容。 */
+    padding-inline: 8px;
+  }
+}
+
+/* 【沉浸歌词最终排版】右侧 listening-panel 桌面宽约 39vw，靠右保持固定基准。
+ * 小屏面板占 station 的 47%，左缘仍在屏幕中线右侧；不随歌词长度移动。
+ * 关键：显式设定可收缩的单列网格，覆盖旧 justify-content:center，避免长句撑开列宽。 */
+body.immersive .listening-panel,
+body.immersive .lyric-shell {
+  min-width: 0;
+  text-align: left;
+}
+body.immersive .lyric {
+  grid-template-columns: minmax(0, 1fr);
+  justify-content: start;
+  justify-items: stretch;
+  /* 清除左右内边距，与上方歌名使用同一条左基准线。 */
+  padding-inline: 0;
+  text-align: left;
+  font-weight: 400;
+  /* 保持无底色、无边框；只在字形周围留下柔和阴影。 */
+  background: transparent;
+  border: 0;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+body.immersive .lyric > div {
+  min-width: 0;
+  width: 100%;
+  text-align: left;
+  font-weight: 400;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, 0.45);
+}
+body.immersive .lyric #lyricCurrent {
+  font-weight: 400;
+  /* 仅用颜色的 alpha 控制亮度，opacity 保持 1，避免重复相乘。 */
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+/* 署名继续使用后面的 11～14px 小字；仅普通正文采用略大的当前句字号。 */
+body.immersive .lyric #lyricCurrent:not(.lyric-credit) {
+  font-size: clamp(17px, 1.55vw, 28px);
+}
+body.immersive .lyric .secondary {
+  color: rgba(255, 255, 255, 0.4);
+  opacity: 1;
+}
+@media (max-width: 800px) {
+  body.immersive .lyric #lyricCurrent:not(.lyric-credit) {
+    font-size: 14.5px;
+  }
+}
+
+/* 歌词中的作词/作曲等署名，由 app.js 的 renderLyricLine() 标记。
+ * 当前句也用小号浅灰，避免把长串 Composed by 当成正文大字；画廊上下句保留 0.5 opacity；沉浸模式统一使用 rgba 颜色控制透明度。 */
+.lyric .lyric-credit,
+body.immersive .lyric .lyric-credit,
+.lyric #lyricCurrent.lyric-credit,
+body.immersive .lyric #lyricCurrent.lyric-credit {
+  font-size: clamp(11px, 0.85vw, 14px);
+  color: rgba(210, 213, 219, 0.65);
+  font-weight: 400;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* 【画廊拖拽】舞台内的歌名、歌手、歌词不参与文本选择，避免拖动时出现蓝色选区。
+ * 仅限制展示区域；下面显式恢复编辑控件，搜索、选择文字与复制粘贴保持正常。 */
+#stage {
+  -webkit-user-select: none;
+  user-select: none;
+}
+input,
+textarea,
+[contenteditable='true'],
+[contenteditable=''],
+[contenteditable='plaintext-only'] {
+  -webkit-user-select: text;
+  user-select: text;
+}
+/* 只有可以拖动的画廊卡片显示抓手；is-dragging 由实际指针拖动状态控制。
+ * 捕获指针后事件落在 stage 上，所以舞台和卡片一起切换为握住状态。 */
+body:not(.immersive) #stage .card {
+  cursor: grab;
+}
+body:not(.immersive) #stage.is-dragging,
+body:not(.immersive) #stage.is-dragging .card {
+  cursor: grabbing;
+}
+
+/* 【沉浸融合】署名保持小字，亮度与所在行一致；不再叠加整行 opacity。
+ * 歌名只略微淡化，频谱从 0.6 降为 0.45；背景图与三行渐隐保持原样。 */
+body.immersive .lyric #lyricCurrent.lyric-credit {
+  color: rgba(255, 255, 255, 0.85);
+  opacity: 1;
+}
+body.immersive .lyric .secondary.lyric-credit {
+  color: rgba(255, 255, 255, 0.4);
+  opacity: 1;
+}
+body.immersive #immersiveTitle {
+  color: rgba(255, 255, 255, 0.8);
+  opacity: 1;
+}
+body.immersive .music-spectrum {
+  opacity: 0.45;
+}
+/* 鼠标静止 1 秒后，JS 添加 controls-idle。只淡出顶部选项，保留布局占位。
+ * 移动时移除类，立即恢复可见与点击；弹窗、输入和按住鼠标操作期间暂停隐藏。 */
+body.immersive.controls-idle header .tools {
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transition: opacity 160ms ease, visibility 0s linear 160ms;
+}
+/* 子元素的 pointer/grab 等指针也要覆盖，否则停在按钮上仍会露出手形。 */
+body.immersive.controls-idle,
+body.immersive.controls-idle * {
+  cursor: none !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  body.immersive.controls-idle header .tools {
+    transition: none;
+  }
+}

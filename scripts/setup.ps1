@@ -1,5 +1,9 @@
 $ErrorActionPreference = 'Stop'
 Write-Host "--- Starting installation ---" -ForegroundColor Cyan
+$nodeVersion = & node --version
+if ($LASTEXITCODE -ne 0 -or [int]($nodeVersion.TrimStart('v').Split('.')[0]) -lt 20) {
+    throw 'Node.js 20 or newer is required.'
+}
 
 $projectRoot = Split-Path $PSScriptRoot -Parent
 $runtimeRoot = Join-Path $projectRoot '.runtime'
@@ -19,8 +23,14 @@ if (-not (Test-Path (Join-Path $providerRoot 'main.js'))) {
 }
 
 Write-Host "Installing dependencies..." -ForegroundColor Yellow
-Set-Location $providerRoot
-npm install --ignore-scripts
-Set-Location $projectRoot
+Push-Location $providerRoot
+try {
+    # npm.cmd avoids PowerShell blocking npm.ps1; an npm failure must not be reported as success.
+    & npm.cmd install --omit=dev --ignore-scripts --no-fund
+    if ($LASTEXITCODE -ne 0) { throw 'Dependency installation failed. Resolve the npm error and run setup again.' }
+    Set-Content -LiteralPath (Join-Path $runtimeRoot 'provider-revision') -Value $revision -Encoding ASCII
+} finally {
+    Pop-Location
+}
 
 Write-Host "--- Installation Complete! Run: node server.mjs ---" -ForegroundColor Green
