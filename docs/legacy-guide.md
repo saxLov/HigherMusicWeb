@@ -58,7 +58,11 @@ HigerMusicWeb/
 │   ├── visualizer.js         实时频谱
 │   ├── *.mjs                 前端媒体与队列辅助模块
 │   └── Image169/             自行添加背景图；仓库默认没有个人图片
-├── docs/images/              README 用的展示截图
+├── docs/
+│   ├── image/                README 用的展示截图
+│   ├── verification /        2.0的阶段性功能验证截图
+│   ├── TESTING-2.0.1.md      2.0版本的测试记录和说明
+│   ├── legacy-guide.md       指南 
 └── test/                     自动化检查
 ```
 如图所示:
